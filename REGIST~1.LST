@@ -1,0 +1,1271 @@
+Turbo Assembler	 Version 4.1	    02/26/21 20:03:37	    Page 1
+regist~1.asm
+
+
+
+      1	0000			     .model tiny
+      2	0000			     .code
+      3				     org 100h
+      4
+      5				     ;;
+      6				     ;	 COLOR CONSTANT
+      7				     ;;
+      8	      =004E		     color_frame      =	04eh
+      9	      =1A00		     color_inside     =	01A00h
+     10	      =00BB		     right_high_angle =	0bbh
+     11	      =00C9		     left_high_angle  =	0c9h
+     12	      =00C8		     left_low_angle   =	0c8h
+     13	      =00BC		     right_low_angle  =	0bch
+     14
+     15	      =00CD		     horizontal_line  =	0cdh
+     16	      =00BA		     vertical_line    =	0bah
+     17	      =0020		     color_clear      =	0020h
+     18
+     19				     ;;
+     20				     ;	 SIZE CONSTANT
+     21				     ;;
+     22
+     23	      =07D0		     size_console = 25 * 80
+     24
+     25	      =0003		     ymin = 3	 ;cx
+     26	      =0011		     ymax = 17
+     27	      =0040		     xmin = 64	 ;dx
+     28	      =004F		     xmax = 79
+     29	      =B800		     vram_ptr =	0b800h
+     30
+     31				     ;;
+     32				     ;	 INTERRUPT CONSTANT
+     33				     ;;
+     34	      =0008		     int08 = 08h
+     35	      =0009		     int09 = 09h
+     36
+     37				     ;===============================================================================================
+     38				     =====
+     39				     ;===============================================================================================
+     40				     =====
+     41				     ;=========================================== MAIN						    +
+     42				     ===================================================
+     43				     ;===============================================================================================
+     44				     =====
+     45				     ;===============================================================================================
+     46				     =====
+     47
+     48	0100			     start:
+     49
+     50	0100  B8 0008			 mov ax, int08
+     51	0103  BF 0204r			 mov di, offset	Old08
+     52	0106  B9 01C4r			 mov cx, offset	Register_updater
+     53	0109  E8 001D			 call New_interrupt
+     54
+     55	010C  B8 0009			 mov ax, int09
+     56	010F  BF 01C0r			 mov di, offset	Old09
+     57	0112  B9 0149r			 mov cx, offset	Register_toggle
+Turbo Assembler	 Version 4.1	    02/26/21 20:03:37	    Page 2
+regist~1.asm
+
+
+
+     58	0115  E8 0011			 call New_interrupt
+     59
+     60	0118  B8 3100			 mov ax, 3100h
+     61	011B  BA 07C0r			 mov dx, offset	END_OF_HALL
+     62	011E  D1 EA D1 EA D1 EA	D1+	 shr dx, 4
+     63	      EA
+     64	0126  42			 inc dx
+     65	0127  CD 21			 int 21h
+     66				     ;======================================================
+     67
+     68
+     69				     ;===============================================================================================
+     70				     =====
+     71				     ;===============================================================================================
+     72				     =====
+     73				     ;====================================== NEW INTERRUPTS					    +
+     74				     ==============================================
+     75				     ;===============================================================================================
+     76				     =====
+     77				     ;===============================================================================================
+     78				     =====
+     79
+     80				     ;------------------------------------------------------
+     81				     ; Merge custom interrupt
+     82				     ; Entry: ax - number of interrupt
+     83				     ;	      di - pointer to address with old interrupt
+     84				     ;	      cx - pointer to new interrupt
+     85				     ;
+     86				     ; Destr: ax, bx, di, es
+     87				     ;------------------------------------------------------
+     88
+     89	0129			     New_interrupt proc
+     90	0129  33 DB			 xor bx, bx
+     91	012B  8E C3			 mov es, bx
+     92	012D  D1 E0 D1 E0		 shl ax, 2
+     93	0131  8B D8			 mov bx, ax
+     94
+     95	0133  FA			 cli
+     96
+     97	0134  26: 8B 07			 mov ax, es:[bx]
+     98	0137  89 05			 mov [di], ax
+     99	0139  26: 8B 47	02		 mov ax, es:[bx	+ 2]
+    100	013D  89 45 02			 mov [di + 2], ax
+    101
+    102
+    103	0140  26: 89 0F			 mov es:[bx], cx
+    104	0143  26: 8C 4F	02		 mov es:[bx + 2], cs
+    105	0147  FB			 sti
+    106
+    107	0148  C3			 ret
+    108	0149			     endp
+    109				     ;======================================================
+    110
+    111				     ;------------------------------------------------------
+    112				     ; New custom interrupt 09h
+    113				     ; Toggle frame with all register
+    114				     ;
+Turbo Assembler	 Version 4.1	    02/26/21 20:03:37	    Page 3
+regist~1.asm
+
+
+
+    115				     ; Button "on" : "Z"
+    116				     ;
+    117				     ; Destr: save all registers
+    118				     ;------------------------------------------------------
+    119
+    120	0149			     Register_toggle proc
+    121	0149  50 53 51 52 56 57	06+	 push ax bx cx dx si di	es ds
+    122	      1E
+    123
+    124	0151  BB 0585r			 mov bx, offset	flag_on
+    125
+    126	0154  B4 4E			 mov ah, 4eh
+    127	0156  E4 60			 in al,	60h
+    128
+    129	0158  3C 2C			 cmp al, 2ch  ;	button "Z" pressed
+    130	015A  74 06			 je flag_update
+    131
+    132	015C  3C 23			 cmp al, 23h  ;	 button	"H" pressed
+    133	015E  74 3E			 je flag_hex
+    134
+    135					 ; cmp al, 0ach	; button "Z" released
+    136	0160  75 55			 jne Standart_int09
+    137
+    138	0162			     flag_update:
+    139
+    140	0162  2E: 8A 0F			 mov cl, byte ptr cs:[bx]
+    141
+    142	0165  80 F9 00			 cmp cl, 0
+    143	0168  74 1A			 je Start_on
+    144
+    145	016A  50 53 51 52 56 57	06+	 push ax bx cx dx si di	es ds
+    146	      1E
+    147	0172  E8 0093			 call Fill_new_vram_of_old_vram
+    148	0175  1F 07 5F 5E 5A 59	5B+	 pop ds	es di si dx cx bx ax
+    149	      58
+    150
+    151	017D  2E: C6 07	00		 mov byte ptr cs:[bx], 0
+    152	0181  EB 34 90			 jmp Standart_int09
+    153
+    154	0184			     Start_on:
+    155	0184  50 53 51 52 56 57	06+	 push ax bx cx dx si di	es ds
+    156	      1E
+    157	018C  E8 00BA			 call Fill_old_vram_of_new_vram
+    158	018F  1F 07 5F 5E 5A 59	5B+	 pop ds	es di si dx cx bx ax
+    159	      58
+    160
+    161	0197  2E: C6 07	01		 mov byte ptr cs:[bx], 1
+    162	019B  EB 1A 90			 jmp Standart_int09
+    163
+    164	019E			     flag_hex:
+    165	019E  BB 0586r			 mov bx, offset	flag_system
+    166	01A1  2E: 8A 0F			 mov cl, byte ptr cs:[bx]
+    167
+    168	01A4  80 F9 00			 cmp cl, 0
+    169	01A7  74 07			 je flag_hex_on
+    170
+    171	01A9  2E: C6 07	00		 mov byte ptr cs:[bx], 0
+Turbo Assembler	 Version 4.1	    02/26/21 20:03:37	    Page 4
+regist~1.asm
+
+
+
+    172	01AD  EB 08 90			 jmp Standart_int09
+    173
+    174	01B0			     flag_hex_on:
+    175	01B0  2E: C6 07	01		 mov byte ptr cs:[bx], 1
+    176	01B4  EB 01 90			 jmp Standart_int09
+    177
+    178
+    179	01B7			     Standart_int09:
+    180
+    181	01B7  1F 07 5F 5E 5A 59	5B+	 pop ds	es di si dx cx bx ax
+    182	      58
+    183
+    184							     ; JMP FAR to old 09h interrupt
+    185	01BF  EA					     db	0eah
+    186	01C0  00000000			 Old09				     dd	0
+    187
+    188	01C4			     endp
+    189				     ;======================================================
+    190
+    191				     ;------------------------------------------------------
+    192				     ; New custom interrupt 08h
+    193				     ; If flag_on == 1,	then create frame with registers and it	values
+    194				     ;
+    195				     ;
+    196				     ; Destr: save all registers
+    197				     ;------------------------------------------------------
+    198
+    199	01C4			     Register_updater proc
+    200	01C4  50 53 51 52 56 57	06+	 push ax bx cx dx si di	es ds
+    201	      1E
+    202
+    203	01CC  0E			 push cs
+    204	01CD  1F			 pop ds
+    205
+    206	01CE  80 3E 0585r 01		 cmp flag_on, 1
+    207	01D3  75 26			 jne Standart_int08
+    208
+    209	01D5  50 53 51 52 56 57	06+	 push ax bx cx dx si di	es ds
+    210	      1E
+    211	01DD  E8 00AA			 call Frame_create
+    212	01E0  1F 07 5F 5E 5A 59	5B+	 pop ds	es di si dx cx bx ax
+    213	      58
+    214	01E8  50 53 51 52 56 57	06+	 push ax bx cx dx si di	es ds
+    215	      1E
+    216	01F0  E8 01BB			 call Print_registers
+    217	01F3  1F 07 5F 5E 5A 59	5B+	 pop ds	es di si dx cx bx ax
+    218	      58
+    219
+    220
+    221
+    222	01FB			     Standart_int08:
+    223
+    224	01FB  1F 07 5F 5E 5A 59	5B+	 pop ds	es di si dx cx bx ax
+    225	      58
+    226
+    227							     ; JMP FAR to old 08h interrupt
+    228	0203  EA					     db	0eah
+Turbo Assembler	 Version 4.1	    02/26/21 20:03:37	    Page 5
+regist~1.asm
+
+
+
+    229	0204  00000000			 Old08				     dd	0
+    230
+    231
+    232	0208			     endp
+    233				     ;======================================================
+    234
+    235				     ;===============================================================================================
+    236				     =====
+    237				     ;===============================================================================================
+    238				     =====
+    239				     ;===================================== SCREEN PROC						    +
+    240				     ==================================================
+    241				     ;===============================================================================================
+    242				     =====
+    243				     ;===============================================================================================
+    244				     =====
+    245
+    246				     ;------------------------------------------------------
+    247				     ; Copy frame from old vram	to current vram.
+    248				     ;
+    249				     ; Destr: ax, bx, cx, dx, di, es
+    250				     ;------------------------------------------------------
+    251
+    252	0208			     Fill_new_vram_of_old_vram proc
+    253	0208  BB B800			 mov bx, vram_ptr
+    254	020B  8E C3			 mov es, bx
+    255
+    256	020D  BB 05E0r			 mov bx, offset	old_vram
+    257	0210  B9 0000			 mov cx, 0
+    258	0213  BA 0000			 mov dx, 0
+    259
+    260	0216			     new_string:
+    261
+    262	0216  B8 0003			 mov ax, ymin
+    263	0219  03 C1			 add ax, cx
+    264
+    265	021B  53			 push bx
+    266	021C  52			 push dx
+    267	021D  BB 0050			 mov bx, 80
+    268	0220  F7 E3			 mul bx
+    269	0222  5A			 pop dx
+    270	0223  5B			 pop bx
+    271
+    272	0224  05 0040			 add ax, xmin
+    273	0227  03 C2			 add ax, dx
+    274	0229  D1 E0			 shl ax, 1
+    275	022B  8B F8			 mov di, ax
+    276
+    277	022D			     print_string:
+    278
+    279	022D  2E: 8B 07			 mov ax, word ptr cs:[bx]
+    280	0230  26: 89 05			 mov word ptr es:[di], ax
+    281
+    282	0233  83 C3 02			 add bx, 2
+    283	0236  83 C7 02			 add di, 2
+    284	0239  42			 inc dx
+    285
+Turbo Assembler	 Version 4.1	    02/26/21 20:03:37	    Page 6
+regist~1.asm
+
+
+
+    286	023A  83 FA 10			 cmp dx, xmax -	xmin + 1
+    287	023D  75 EE			 jne print_string
+    288
+    289	023F  41			 inc cx
+    290	0240  BA 0000			 mov dx, 0
+    291
+    292	0243  83 F9 0F			 cmp cx, ymax -	ymin + 1
+    293	0246  75 CE			 jne new_string
+    294
+    295	0248  C3			 ret
+    296	0249			     endp
+    297				     ;======================================================
+    298
+    299				     ;------------------------------------------------------
+    300				     ; Copy frame from current vram to temporary (old) vram.
+    301				     ;
+    302				     ; Destr: ax, bx, cx, dx, di, es
+    303				     ;------------------------------------------------------
+    304
+    305	0249			     Fill_old_vram_of_new_vram proc
+    306	0249  BB B800			 mov bx, vram_ptr
+    307	024C  8E C3			 mov es, bx
+    308
+    309	024E  BB 05E0r			 lea bx, old_vram
+    310	0251  B9 0000			 mov cx, 0
+    311	0254  BA 0000			 mov dx, 0
+    312
+    313	0257			     new_string2:
+    314
+    315	0257  B8 0003			 mov ax, ymin
+    316	025A  03 C1			 add ax, cx
+    317
+    318	025C  53			 push bx
+    319	025D  52			 push dx
+    320	025E  BB 0050			 mov bx, 80
+    321	0261  F7 E3			 mul bx
+    322	0263  5A			 pop dx
+    323	0264  5B			 pop bx
+    324
+    325	0265  05 0040			 add ax, xmin
+    326	0268  03 C2			 add ax, dx
+    327	026A  D1 E0			 shl ax, 1
+    328	026C  8B F8			 mov di, ax
+    329
+    330	026E			     print_string2:
+    331
+    332	026E  26: 8B 05			 mov ax, word ptr es:[di]
+    333	0271  2E: 89 07			 mov word ptr cs:[bx], ax
+    334
+    335	0274  83 C3 02			 add bx, 2
+    336	0277  83 C7 02			 add di, 2
+    337	027A  42			 inc dx
+    338
+    339	027B  83 FA 10			 cmp dx, xmax -	xmin + 1
+    340	027E  75 EE			 jne print_string2
+    341
+    342	0280  41			 inc cx
+Turbo Assembler	 Version 4.1	    02/26/21 20:03:37	    Page 7
+regist~1.asm
+
+
+
+    343	0281  BA 0000			 mov dx, 0
+    344
+    345	0284  83 F9 0F			 cmp cx, ymax -	ymin + 1
+    346	0287  75 CE			 jne new_string2
+    347
+    348	0289  C3			 ret
+    349	028A			     endp
+    350				     ;======================================================
+    351
+    352				     ;------------------------------------------------------
+    353				     ; Create window.
+    354				     ;
+    355				     ; Destr: ax, bx, cx, dx, es, di
+    356				     ;------------------------------------------------------
+    357
+    358	028A			     Frame_create proc
+    359	028A  BB B800			 mov bx, vram_ptr
+    360	028D  8E C3			 mov es, bx
+    361
+    362	028F  B4 4E			 mov ah, color_frame
+    363	0291  B0 C8			 mov al, left_low_angle
+    364	0293  B9 0011			 mov cx, ymax
+    365	0296  BA 0040			 mov dx, xmin
+    366	0299  E8 00F9			 call Angle
+    367
+    368
+    369	029C  B4 4E			 mov ah, color_frame
+    370	029E  B0 BB			 mov al, right_high_angle
+    371	02A0  B9 0003			 mov cx, ymin
+    372	02A3  BA 004F			 mov dx, xmax
+    373	02A6  E8 00EC			 call Angle
+    374
+    375	02A9  B9 0001			 mov cx, 1
+    376	02AC  BA 0001			 mov dx, 1
+    377
+    378	02AF			     Full:
+    379
+    380	02AF  52			 push dx
+    381	02B0  51			 push cx
+    382	02B1  E8 00C4			 call R_vertical
+    383	02B4  59			 pop cx
+    384	02B5  5A			 pop dx
+    385
+    386	02B6  52			 push dx
+    387	02B7  51			 push cx
+    388	02B8  E8 00A0			 call L_vertical
+    389	02BB  59			 pop cx
+    390	02BC  5A			 pop dx
+    391
+    392	02BD			     Horizontal:
+    393
+    394	02BD  52			 push dx
+    395	02BE  51			 push cx
+    396	02BF  E8 007C			 call H_horizontal
+    397	02C2  59			 pop cx
+    398	02C3  5A			 pop dx
+    399
+Turbo Assembler	 Version 4.1	    02/26/21 20:03:37	    Page 8
+regist~1.asm
+
+
+
+    400	02C4  52			 push dx
+    401	02C5  51			 push cx
+    402	02C6  E8 0058			 call L_horizontal
+    403	02C9  59			 pop cx
+    404	02CA  5A			 pop dx
+    405
+    406	02CB  41			 inc cx
+    407	02CC  42			 inc dx
+    408
+    409	02CD  83 F9 0D			 cmp cx, ymax -	ymin - 1
+    410	02D0  76 DD			 jbe Full
+    411
+    412	02D2  83 FA 0E			 cmp dx, xmax -	xmin - 1
+    413	02D5  76 E6			 jbe Horizontal
+    414
+    415	02D7  B4 4E			 mov ah, color_frame
+    416	02D9  B0 C9			 mov al, left_high_angle
+    417	02DB  B9 0003			 mov cx, ymin
+    418	02DE  BA 0040			 mov dx, xmin
+    419	02E1  E8 00B1			 call Angle
+    420
+    421	02E4  B4 4E			 mov ah, color_frame
+    422	02E6  B0 BC			 mov al, right_low_angle
+    423	02E8  B9 0011			 mov cx, ymax
+    424	02EB  BA 004F			 mov dx, xmax
+    425	02EE  E8 00A4			 call Angle
+    426
+    427	02F1  E8 000E			 call Screen_fill
+    428
+    429	02F4  C3			 ret
+    430	02F5				 endp
+    431				     ;======================================================
+    432
+    433				     ;------------------------------------------------------
+    434				     ; Create empty console. Size of console: 80 x 25
+    435				     ; Entry: es - ptr to 0b800h
+    436				     ;
+    437				     ; Destr: ax, cx. di
+    438				     ;------------------------------------------------------
+    439
+    440	02F5			     Screen_clear proc
+    441
+    442	02F5  BF 0000			 mov di, 0
+    443	02F8  B8 0020			 mov ax, color_clear
+    444	02FB  B9 07D0			 mov cx, size_console
+    445	02FE  FC			 cld
+    446	02FF  F3> AB			 rep stosw
+    447
+    448	0301  C3			 ret
+    449	0302				 endp
+    450				     ;======================================================
+    451
+    452				     ;------------------------------------------------------
+    453				     ; Fill the	inside of the frame (from (xmin	+ 1; ymin + 1) to (xmax	- 1; ymax - 1)).
+    454				     ; Entry: es - ptr to 0b800h
+    455				     ;
+    456				     ; Destr: ax, cx. di
+Turbo Assembler	 Version 4.1	    02/26/21 20:03:37	    Page 9
+regist~1.asm
+
+
+
+    457				     ;------------------------------------------------------
+    458
+    459	0302			     Screen_fill proc
+    460	0302  B9 0000			 mov cx, 0
+    461	0305  B8 1A20			 mov ax, color_inside or ' '
+    462	0308  BF 0302			 mov di, ((ymin	+ 1) * 80 + xmin + 1) *	2
+    463
+    464	030B			     string:
+    465	030B  51			 push cx
+    466
+    467	030C  B9 000E			 mov cx, xmax -	xmin - 1
+    468	030F  FC			 cld
+    469	0310  F3> AB			 rep stosw
+    470
+    471	0312  81 C7 00A0		 add di, 80 * 2
+    472	0316  83 EF 1C			 sub di, (xmax - xmin -	1) * 2
+    473	0319  59			 pop cx
+    474	031A  41			 inc cx
+    475
+    476	031B  83 F9 0D			 cmp cx, ymax -	ymin - 1
+    477	031E  75 EB			 jne string
+    478
+    479	0320  C3			 ret
+    480	0321				 endp
+    481				     ;======================================================
+    482
+    483				     ;------------------------------------------------------
+    484				     ; Draw point of low horizontal line from (xmin, ymax) to (xmax, ymax)
+    485				     ; Entry: cx - shift y0
+    486				     ;	      dx - shift x0
+    487				     ;
+    488				     ;	      es - ptr to 0b800h
+    489				     ;
+    490				     ; Destr: ax, bx, cx, dx
+    491				     ;------------------------------------------------------
+    492
+    493	0321			     L_horizontal proc
+    494
+    495	0321  B8 0011			 mov ax, ymax
+    496	0324  BB 0050			 mov bx, 80
+    497
+    498	0327  52			 push dx
+    499	0328  F7 E3			 mul bx
+    500	032A  5A			 pop dx
+    501
+    502	032B  05 0040			 add ax, xmin
+    503	032E  03 C2			 add ax, dx
+    504
+    505	0330  D1 E0			 shl ax, 1
+    506	0332  8B D8			 mov bx, ax
+    507
+    508	0334  26: C6 07	CD		 mov byte ptr es:[bx], horizontal_line
+    509	0338  26: C6 47	01 4E		 mov byte ptr es:[bx + 1], color_frame
+    510
+    511	033D  C3			 ret
+    512	033E				 endp
+    513				     ;======================================================
+Turbo Assembler	 Version 4.1	    02/26/21 20:03:37	    Page 10
+regist~1.asm
+
+
+
+    514
+    515				     ;------------------------------------------------------
+    516				     ; Draw point of high horizontal line from (xmax, ymin) to (xmin, ymin)
+    517				     ; Entry: cx - shift y0
+    518				     ;	      dx - shift x0
+    519				     ;
+    520				     ;	      es - ptr to 0b800h
+    521				     ;
+    522				     ; Destr: ax, bx, cx, dx
+    523				     ;------------------------------------------------------
+    524
+    525	033E			     H_horizontal proc
+    526
+    527	033E  B8 0003			 mov ax, ymin
+    528	0341  BB 0050			 mov bx, 80
+    529
+    530	0344  52			 push dx
+    531	0345  F7 E3			 mul bx
+    532	0347  5A			 pop dx
+    533
+    534	0348  05 004F			 add ax, xmax
+    535	034B  2B C2			 sub ax, dx
+    536	034D  D1 E0			 shl ax, 1
+    537
+    538	034F  8B D8			 mov bx, ax
+    539
+    540	0351  26: C6 07	CD		 mov byte ptr es:[bx], horizontal_line
+    541	0355  26: C6 47	01 4E		 mov byte ptr es:[bx + 1], color_frame
+    542
+    543	035A  C3			 ret
+    544	035B				 endp
+    545				     ;======================================================
+    546
+    547				     ;------------------------------------------------------
+    548				     ; Draw point of left vertical line	from (xmin, ymax) to (xmin, ymin)
+    549				     ; Entry: cx - shift y0
+    550				     ;	      dx - shift x0
+    551				     ;
+    552				     ;	      es - ptr to 0b800h
+    553				     ;
+    554				     ; Destr: ax, bx, cx, dx
+    555				     ;------------------------------------------------------
+    556
+    557	035B			     L_vertical	proc
+    558
+    559	035B  B8 0011			 mov ax, ymax
+    560	035E  2B C1			 sub ax, cx
+    561	0360  BB 0050			 mov bx, 80
+    562
+    563	0363  52			 push dx
+    564	0364  F7 E3			 mul bx
+    565	0366  5A			 pop dx
+    566
+    567	0367  05 0040			 add ax, xmin
+    568	036A  D1 E0			 shl ax, 1
+    569	036C  8B D8			 mov bx, ax
+    570
+Turbo Assembler	 Version 4.1	    02/26/21 20:03:37	    Page 11
+regist~1.asm
+
+
+
+    571	036E  26: C6 07	BA		 mov byte ptr es:[bx], vertical_line
+    572	0372  26: C6 47	01 4E		 mov byte ptr es:[bx + 1], color_frame
+    573
+    574	0377  C3			 ret
+    575	0378				 endp
+    576				     ;======================================================
+    577
+    578				     ;------------------------------------------------------
+    579				     ; Draw point of right vertical line from (xmax, ymin) to (xmax, ymax)
+    580				     ; Entry: cx - shift y0
+    581				     ;	      dx - shift x0
+    582				     ;
+    583				     ;	      es - ptr to 0b800h
+    584				     ;
+    585				     ; Destr: ax, bx, cx, dx
+    586				     ;------------------------------------------------------
+    587
+    588	0378			     R_vertical	proc
+    589
+    590	0378  B8 0003			 mov ax, ymin
+    591	037B  03 C1			 add ax, cx
+    592	037D  BB 0050			 mov bx, 80
+    593
+    594	0380  52			 push dx
+    595	0381  F7 E3			 mul bx
+    596	0383  5A			 pop dx
+    597
+    598	0384  05 004F			 add ax, xmax
+    599	0387  D1 E0			 shl ax, 1
+    600	0389  8B D8			 mov bx, ax
+    601
+    602	038B  26: C6 07	BA		 mov byte ptr es:[bx], vertical_line
+    603	038F  26: C6 47	01 4E		 mov byte ptr es:[bx + 1], color_frame
+    604
+    605	0394  C3			 ret
+    606	0395				 endp
+    607				     ;======================================================
+    608
+    609				     ;------------------------------------------------------
+    610				     ; Draw char with (x0, y0)
+    611				     ; Entry: ax - char
+    612				     ;	      cx - y0
+    613				     ;	      dx - x0
+    614				     ;
+    615				     ;	      es - ptr to 0b800h
+    616				     ;
+    617				     ; Destr: ax, bx, cx, dx
+    618				     ;------------------------------------------------------
+    619
+    620	0395			     Angle proc
+    621	0395  50			 push ax
+    622	0396  52			 push dx
+    623
+    624	0397  8B C1			 mov ax, cx
+    625	0399  BB 0050			 mov bx, 80
+    626	039C  F7 E3			 mul bx
+    627
+Turbo Assembler	 Version 4.1	    02/26/21 20:03:37	    Page 12
+regist~1.asm
+
+
+
+    628	039E  5A			 pop dx
+    629	039F  03 C2			 add ax, dx
+    630	03A1  D1 E0			 shl ax, 1
+    631	03A3  8B D8			 mov bx, ax
+    632
+    633	03A5  58			 pop ax
+    634
+    635	03A6  26: 88 07			 mov byte ptr es:[bx], al
+    636	03A9  26: 88 67	01		 mov byte ptr es:[bx + 1], ah
+    637
+    638	03AD  C3			 ret
+    639	03AE				 endp
+    640				     ;=======================================================
+    641
+    642				     ;===============================================================================================
+    643				     =====
+    644				     ;===============================================================================================
+    645				     =====
+    646				     ;=================================== PRINT	REGISTERS					    +
+    647				     ================================================
+    648				     ;===============================================================================================
+    649				     =====
+    650				     ;===============================================================================================
+    651				     =====
+    652
+    653				     ;------------------------------------------------------
+    654				     ; Print ax, bx, cx, dx, di, es and	it values in frame
+    655				     ;
+    656				     ;
+    657				     ; Destr: ax, bx, cx, dx, di, es
+    658				     ;-------------------------------------------------------
+    659
+    660	03AE			     Print_registers proc
+    661
+    662	03AE  50 53 51 52 57 06		 push ax bx cx dx di es
+    663
+    664	03B4  BF 03A4			 mov di, ((ymin	+ 2) * 80 + (xmin + 2))	* 2
+    665
+    666					 IRP regs, <ax,	bx, cx,	dx, di,	es>
+    667					     lea si, msg_reg_&regs
+    668					     mov cx, 10
+    669					     call Print_base
+    670
+    671					     add di, 80	* 4 - 20
+    672					 ENDM
+1   673	03B7  BE 0587r			     lea si, msg_reg_ax
+1   674	03BA  B9 000A			     mov cx, 10
+1   675	03BD  E8 01AF			     call Print_base
+1   676
+1   677	03C0  81 C7 012C		     add di, 80	* 4 - 20
+1   678	03C4  BE 0593r			     lea si, msg_reg_bx
+1   679	03C7  B9 000A			     mov cx, 10
+1   680	03CA  E8 01A2			     call Print_base
+1   681
+1   682	03CD  81 C7 012C		     add di, 80	* 4 - 20
+1   683	03D1  BE 059Fr			     lea si, msg_reg_cx
+1   684	03D4  B9 000A			     mov cx, 10
+Turbo Assembler	 Version 4.1	    02/26/21 20:03:37	    Page 13
+regist~1.asm
+
+
+
+1   685	03D7  E8 0195			     call Print_base
+1   686
+1   687	03DA  81 C7 012C		     add di, 80	* 4 - 20
+1   688	03DE  BE 05ABr			     lea si, msg_reg_dx
+1   689	03E1  B9 000A			     mov cx, 10
+1   690	03E4  E8 0188			     call Print_base
+1   691
+1   692	03E7  81 C7 012C		     add di, 80	* 4 - 20
+1   693	03EB  BE 05B7r			     lea si, msg_reg_di
+1   694	03EE  B9 000A			     mov cx, 10
+1   695	03F1  E8 017B			     call Print_base
+1   696
+1   697	03F4  81 C7 012C		     add di, 80	* 4 - 20
+1   698	03F8  BE 05C3r			     lea si, msg_reg_es
+1   699	03FB  B9 000A			     mov cx, 10
+1   700	03FE  E8 016E			     call Print_base
+1   701
+1   702	0401  81 C7 012C		     add di, 80	* 4 - 20
+    703
+    704	0405  BE 09EE			 mov si, ((ymax	- 2) * 80 + (xmin + 7))	* 2
+    705
+    706					 IRP regs, <es,	di, dx,	cx, bx,	ax>
+    707
+    708					     pop ax
+    709
+    710					     mov bx, offset flag_system
+    711					     mov cl, byte ptr cs:[bx]
+    712					     cmp cl, 0
+    713					     je	Dec_print_&regs
+    714
+    715
+    716					     mov cl, 'h'
+    717					     mov di, 1111b
+    718					     mov dx, 4
+    719
+    720					     call Hex_convert
+    721					     jmp End_print_&regs
+    722
+    723				     Dec_print_&regs:
+    724
+    725					     mov cl, 'd'
+    726					     mov di, 10
+    727					     call Dec_convert
+    728					     jmp End_print_&regs
+    729
+    730				     End_print_&regs:
+    731					     sub si, 80	* 4
+    732					 ENDM
+1   733
+1   734	0408  58			     pop ax
+1   735
+1   736	0409  BB 0586r			     mov bx, offset flag_system
+1   737	040C  2E: 8A 0F			     mov cl, byte ptr cs:[bx]
+1   738	040F  80 F9 00			     cmp cl, 0
+1   739	0412  74 0E			     je	Dec_print_es
+1   740
+1   741
+Turbo Assembler	 Version 4.1	    02/26/21 20:03:37	    Page 14
+regist~1.asm
+
+
+
+1   742	0414  B1 68			     mov cl, 'h'
+1   743	0416  BF 000F			     mov di, 1111b
+1   744	0419  BA 0004			     mov dx, 4
+1   745
+1   746	041C  E8 0122			     call Hex_convert
+1   747	041F  EB 0C 90			     jmp End_print_es
+1   748
+1   749	0422			     Dec_print_es:
+1   750
+1   751	0422  B1 64			     mov cl, 'd'
+1   752	0424  BF 000A			     mov di, 10
+1   753	0427  E8 00D5			     call Dec_convert
+1   754	042A  EB 01 90			     jmp End_print_es
+1   755
+1   756	042D			     End_print_es:
+1   757	042D  81 EE 0140		     sub si, 80	* 4
+1   758
+1   759	0431  58			     pop ax
+1   760
+1   761	0432  BB 0586r			     mov bx, offset flag_system
+1   762	0435  2E: 8A 0F			     mov cl, byte ptr cs:[bx]
+1   763	0438  80 F9 00			     cmp cl, 0
+1   764	043B  74 0E			     je	Dec_print_di
+1   765
+1   766
+1   767	043D  B1 68			     mov cl, 'h'
+1   768	043F  BF 000F			     mov di, 1111b
+1   769	0442  BA 0004			     mov dx, 4
+1   770
+1   771	0445  E8 00F9			     call Hex_convert
+1   772	0448  EB 0C 90			     jmp End_print_di
+1   773
+1   774	044B			     Dec_print_di:
+1   775
+1   776	044B  B1 64			     mov cl, 'd'
+1   777	044D  BF 000A			     mov di, 10
+1   778	0450  E8 00AC			     call Dec_convert
+1   779	0453  EB 01 90			     jmp End_print_di
+1   780
+1   781	0456			     End_print_di:
+1   782	0456  81 EE 0140		     sub si, 80	* 4
+1   783
+1   784	045A  58			     pop ax
+1   785
+1   786	045B  BB 0586r			     mov bx, offset flag_system
+1   787	045E  2E: 8A 0F			     mov cl, byte ptr cs:[bx]
+1   788	0461  80 F9 00			     cmp cl, 0
+1   789	0464  74 0E			     je	Dec_print_dx
+1   790
+1   791
+1   792	0466  B1 68			     mov cl, 'h'
+1   793	0468  BF 000F			     mov di, 1111b
+1   794	046B  BA 0004			     mov dx, 4
+1   795
+1   796	046E  E8 00D0			     call Hex_convert
+1   797	0471  EB 0C 90			     jmp End_print_dx
+1   798
+Turbo Assembler	 Version 4.1	    02/26/21 20:03:37	    Page 15
+regist~1.asm
+
+
+
+1   799	0474			     Dec_print_dx:
+1   800
+1   801	0474  B1 64			     mov cl, 'd'
+1   802	0476  BF 000A			     mov di, 10
+1   803	0479  E8 0083			     call Dec_convert
+1   804	047C  EB 01 90			     jmp End_print_dx
+1   805
+1   806	047F			     End_print_dx:
+1   807	047F  81 EE 0140		     sub si, 80	* 4
+1   808
+1   809	0483  58			     pop ax
+1   810
+1   811	0484  BB 0586r			     mov bx, offset flag_system
+1   812	0487  2E: 8A 0F			     mov cl, byte ptr cs:[bx]
+1   813	048A  80 F9 00			     cmp cl, 0
+1   814	048D  74 0E			     je	Dec_print_cx
+1   815
+1   816
+1   817	048F  B1 68			     mov cl, 'h'
+1   818	0491  BF 000F			     mov di, 1111b
+1   819	0494  BA 0004			     mov dx, 4
+1   820
+1   821	0497  E8 00A7			     call Hex_convert
+1   822	049A  EB 0C 90			     jmp End_print_cx
+1   823
+1   824	049D			     Dec_print_cx:
+1   825
+1   826	049D  B1 64			     mov cl, 'd'
+1   827	049F  BF 000A			     mov di, 10
+1   828	04A2  E8 005A			     call Dec_convert
+1   829	04A5  EB 01 90			     jmp End_print_cx
+1   830
+1   831	04A8			     End_print_cx:
+1   832	04A8  81 EE 0140		     sub si, 80	* 4
+1   833
+1   834	04AC  58			     pop ax
+1   835
+1   836	04AD  BB 0586r			     mov bx, offset flag_system
+1   837	04B0  2E: 8A 0F			     mov cl, byte ptr cs:[bx]
+1   838	04B3  80 F9 00			     cmp cl, 0
+1   839	04B6  74 0E			     je	Dec_print_bx
+1   840
+1   841
+1   842	04B8  B1 68			     mov cl, 'h'
+1   843	04BA  BF 000F			     mov di, 1111b
+1   844	04BD  BA 0004			     mov dx, 4
+1   845
+1   846	04C0  E8 007E			     call Hex_convert
+1   847	04C3  EB 0C 90			     jmp End_print_bx
+1   848
+1   849	04C6			     Dec_print_bx:
+1   850
+1   851	04C6  B1 64			     mov cl, 'd'
+1   852	04C8  BF 000A			     mov di, 10
+1   853	04CB  E8 0031			     call Dec_convert
+1   854	04CE  EB 01 90			     jmp End_print_bx
+1   855
+Turbo Assembler	 Version 4.1	    02/26/21 20:03:37	    Page 16
+regist~1.asm
+
+
+
+1   856	04D1			     End_print_bx:
+1   857	04D1  81 EE 0140		     sub si, 80	* 4
+1   858
+1   859	04D5  58			     pop ax
+1   860
+1   861	04D6  BB 0586r			     mov bx, offset flag_system
+1   862	04D9  2E: 8A 0F			     mov cl, byte ptr cs:[bx]
+1   863	04DC  80 F9 00			     cmp cl, 0
+1   864	04DF  74 0E			     je	Dec_print_ax
+1   865
+1   866
+1   867	04E1  B1 68			     mov cl, 'h'
+1   868	04E3  BF 000F			     mov di, 1111b
+1   869	04E6  BA 0004			     mov dx, 4
+1   870
+1   871	04E9  E8 0055			     call Hex_convert
+1   872	04EC  EB 0C 90			     jmp End_print_ax
+1   873
+1   874	04EF			     Dec_print_ax:
+1   875
+1   876	04EF  B1 64			     mov cl, 'd'
+1   877	04F1  BF 000A			     mov di, 10
+1   878	04F4  E8 0008			     call Dec_convert
+1   879	04F7  EB 01 90			     jmp End_print_ax
+1   880
+1   881	04FA			     End_print_ax:
+1   882	04FA  81 EE 0140		     sub si, 80	* 4
+    883	04FE  C3			 ret
+    884	04FF			     endp
+    885				     ;=====================================================
+    886
+    887				     ;------------------------------------------------------
+    888				     ; Print dec (or other system foundation in	register di) representation of number located in ax
+    889				     ; Print begin with	point on address (in bx)
+    890				     ; Use jmp to Print	(label in Dec_convert proc)
+    891				     ; Entry: ax - our number
+    892				     ;	      si - shift vram to print
+    893				     ;	      es - ptr to 0b800h
+    894				     ;	      di - system foundation
+    895				     ;	      cl - symbol of system
+    896				     ;
+    897				     ; Destr: ax, bx, cx. di, dl, si
+    898				     ;------------------------------------------------------
+    899
+    900	04FF			     Dec_convert proc
+    901
+    902	04FF  83 C6 0A			 add si, 10
+    903	0502  26: 88 0C			 mov byte ptr es:[si], cl
+    904	0505  26: C6 44	01 1A		 mov byte ptr es:[si + 1], 01Ah
+    905	050A  83 EE 0A			 sub si, 10
+    906
+    907	050D  BB 0000			 mov bx, 0
+    908
+    909	0510			     Deg:
+    910
+    911	0510  BA 0000			 mov dx, 0
+    912	0513  8B CF			 mov cx, di
+Turbo Assembler	 Version 4.1	    02/26/21 20:03:37	    Page 17
+regist~1.asm
+
+
+
+    913	0515  F7 F1			 div cx
+    914	0517  52			 push dx
+    915	0518  43			 inc bx
+    916
+    917	0519  3D 0000			 cmp ax, 0
+    918	051C  75 F2			 jne Deg
+    919
+    920	051E  8B CB			 mov cx, bx
+    921	0520  8B DE			 mov bx, si
+    922	0522  83 C3 0A			 add bx, 10
+    923	0525  2B D9			 sub bx, cx
+    924	0527  2B D9			 sub bx, cx
+    925
+    926
+    927				     ;------------------------------------------------------
+    928				     ; Print the digits	from Stack
+    929				     ; Entry: cx - number of digits
+    930				     ;	      es - ptr to 0b800h (video	ram)
+    931				     ;	      bx - offset to the print location
+    932				     ;
+    933				     ; Destr: cx, di, bx
+    934				     ;------------------------------------------------------
+    935
+    936	0529			     Print:
+    937
+    938	0529  5F			 pop di
+    939	052A  2E: 8A 95	05CFr		 mov dl, byte ptr cs:[offset System + di]
+    940
+    941	052F  26: 88 17			 mov byte ptr es:[bx], dl
+    942	0532  26: C6 47	01 1A		 mov byte ptr es:[bx + 1], 01Ah
+    943	0537  83 C3 02			 add bx, 2
+    944
+    945	053A  49			 dec cx
+    946	053B  83 F9 00			 cmp cx, 0
+    947	053E  75 E9			 jne Print
+    948
+    949	0540  C3			 ret
+    950	0541				 endp
+    951				     ;======================================================
+    952
+    953				     ;------------------------------------------------------
+    954				     ; Print hex (or other system foundation pow 2) representation of number located in	ax
+    955				     ; Print begin with	point on address (in bx)
+    956				     ; Use jmp to Print	(label in Dec_convert proc)
+    957				     ; Entry: ax - our number
+    958				     ;	      si - shift vram to print
+    959				     ;	      es - ptr to 0b800h
+    960				     ;	      di - byte	mask
+    961				     ;	      dx - byte	shift
+    962				     ;	      cl - symbol of system
+    963				     ;
+    964				     ; Destr: ax, bx, cx. di, dl, si
+    965				     ;------------------------------------------------------
+    966
+    967	0541			     Hex_convert proc
+    968
+    969	0541  83 C6 0A			 add si, 10
+Turbo Assembler	 Version 4.1	    02/26/21 20:03:37	    Page 18
+regist~1.asm
+
+
+
+    970	0544  26: 88 0C			 mov byte ptr es:[si], cl
+    971	0547  26: C6 44	01 1A		 mov byte ptr es:[si + 1], 01Ah
+    972	054C  83 EE 0A			 sub si, 10
+    973
+    974	054F  B9 0000			 mov cx, 0
+    975
+    976	0552			     Hex:
+    977	0552  8B D8			 mov bx, ax
+    978	0554  23 DF			 and bx, di
+    979	0556  53			 push bx
+    980	0557  51			 push cx
+    981	0558  8A CA			 mov cl, dl
+    982	055A  D3 E8			 shr ax, cl
+    983	055C  59			 pop cx
+    984	055D  41			 inc cx
+    985
+    986	055E  3D 0000			 cmp ax, 0
+    987	0561  75 EF			 jne Hex
+    988
+    989	0563  8B DE			 mov bx, si
+    990	0565  83 C3 0A			 add bx, 10
+    991	0568  2B D9			 sub bx, cx
+    992	056A  2B D9			 sub bx, cx
+    993	056C  EB BB			 jmp Print
+    994
+    995	056E  C3			 ret
+    996	056F				 endp
+    997				     ;==================================================
+    998
+    999				     ;------------------------------------------------------
+   1000				     ; Print print base	for values registers
+   1001				     ; Print begin with	point on address (in di)
+   1002				     ; Entry: si - pointer to our buffer base
+   1003				     ;	      es - ptr to 0b800h
+   1004				     ;	      cx - number of symbols in	strings
+   1005				     ;
+   1006				     ; Destr: ax, bx, cx. di, dx, si
+   1007				     ;------------------------------------------------------
+   1008
+   1009	056F			     Print_base	proc
+   1010	056F  BB B800			 mov bx, 0b800h
+   1011	0572  8E C3			 mov es, bx
+   1012
+   1013	0574			     Print_base_reg:
+   1014	0574  2E: 8A 04			 mov al, byte ptr cs:[si]
+   1015	0577  26: 88 05			 mov byte ptr es:[di], al
+   1016	057A  46			 inc si
+   1017	057B  83 C7 02			 add di, 2
+   1018	057E  49			 dec cx
+   1019
+   1020	057F  83 F9 00			 cmp cx, 0
+   1021	0582  75 F0			 jne Print_base_reg
+   1022
+   1023	0584  C3			 ret
+   1024	0585			     endp
+   1025				     ;=======================================================
+   1026
+Turbo Assembler	 Version 4.1	    02/26/21 20:03:37	    Page 19
+regist~1.asm
+
+
+
+   1027				     ;;
+   1028				     ;	 FLAG FOR CUSTUM INTERRUPTS
+   1029				     ;;
+   1030	0585  00		     flag_on	 db 0
+   1031	0586  00		     flag_system db 0
+   1032
+   1033				     ;;
+   1034				     ;	 BUFFERS FOR BASE PRINT	REGISTERS
+   1035				     ;;
+   1036	0587  61 78 20 3D 20 30	30+  msg_reg_ax	db "ax = 00000 $"
+   1037	      30 30 30 20 24
+   1038	0593  62 78 20 3D 20 30	30+  msg_reg_bx	db "bx = 00000 $"
+   1039	      30 30 30 20 24
+   1040	059F  63 78 20 3D 20 30	30+  msg_reg_cx	db "cx = 00000 $"
+   1041	      30 30 30 20 24
+   1042	05AB  64 78 20 3D 20 30	30+  msg_reg_dx	db "dx = 00000 $"
+   1043	      30 30 30 20 24
+   1044	05B7  64 69 20 3D 20 30	30+  msg_reg_di	db "di = 00000 $"
+   1045	      30 30 30 20 24
+   1046	05C3  65 73 20 3D 20 30	30+  msg_reg_es	db "es = 00000 $"
+   1047	      30 30 30 20 24
+   1048
+   1049
+   1050				     ;;
+   1051				     ;	 STRING	FOR QUICK CONVERTETION
+   1052				     ;;
+   1053	05CF  30 31 32 33 34 35	36+  System db '0123456789ABCDEF$'
+   1054	      37 38 39 41 42 43	44+
+   1055	      45 46 24
+   1056
+   1057				     ;;
+   1058				     ;	 OLD VRAM
+   1059				     ;;
+   1060	05E0  F0*(????)		     old_vram dw (ymax - ymin +	1) * (xmax - xmin + 1) dup (?)
+   1061
+   1062	07C0			     END_OF_HALL:
+   1063				     end start
+Turbo Assembler	 Version 4.1	    02/26/21 20:03:37	    Page 20
+Symbol Table
+
+
+
+
+Symbol Name			  Type	 Value
+
+??DATE				  Text	 "02/26/21"
+??FILENAME			  Text	 "regist~1"
+??TIME				  Text	 "20:03:36"
+??VERSION			  Number 040A
+@32BIT				  Text	 0
+@CODE				  Text	 DGROUP
+@CODESIZE			  Text	 0
+@CPU				  Text	 0101H
+@CURSEG				  Text	 _TEXT
+@DATA				  Text	 DGROUP
+@DATASIZE			  Text	 0
+@FILENAME			  Text	 REGIST~1
+@INTERFACE			  Text	 000H
+@MODEL				  Text	 1
+@STACK				  Text	 DGROUP
+@WORDSIZE			  Text	 2
+ANGLE				  Near	 DGROUP:0395
+COLOR_CLEAR			  Number 0020
+COLOR_FRAME			  Number 004E
+COLOR_INSIDE			  Number 1A00
+DEC_CONVERT			  Near	 DGROUP:04FF
+DEC_PRINT_AX			  Near	 DGROUP:04EF
+DEC_PRINT_BX			  Near	 DGROUP:04C6
+DEC_PRINT_CX			  Near	 DGROUP:049D
+DEC_PRINT_DI			  Near	 DGROUP:044B
+DEC_PRINT_DX			  Near	 DGROUP:0474
+DEC_PRINT_ES			  Near	 DGROUP:0422
+DEG				  Near	 DGROUP:0510
+END_OF_HALL			  Near	 DGROUP:07C0
+END_PRINT_AX			  Near	 DGROUP:04FA
+END_PRINT_BX			  Near	 DGROUP:04D1
+END_PRINT_CX			  Near	 DGROUP:04A8
+END_PRINT_DI			  Near	 DGROUP:0456
+END_PRINT_DX			  Near	 DGROUP:047F
+END_PRINT_ES			  Near	 DGROUP:042D
+FILL_NEW_VRAM_OF_OLD_VRAM	  Near	 DGROUP:0208
+FILL_OLD_VRAM_OF_NEW_VRAM	  Near	 DGROUP:0249
+FLAG_HEX			  Near	 DGROUP:019E
+FLAG_HEX_ON			  Near	 DGROUP:01B0
+FLAG_ON				  Byte	 DGROUP:0585
+FLAG_SYSTEM			  Byte	 DGROUP:0586
+FLAG_UPDATE			  Near	 DGROUP:0162
+FRAME_CREATE			  Near	 DGROUP:028A
+FULL				  Near	 DGROUP:02AF
+HEX				  Near	 DGROUP:0552
+HEX_CONVERT			  Near	 DGROUP:0541
+HORIZONTAL			  Near	 DGROUP:02BD
+HORIZONTAL_LINE			  Number 00CD
+H_HORIZONTAL			  Near	 DGROUP:033E
+INT08				  Number 0008
+INT09				  Number 0009
+LEFT_HIGH_ANGLE			  Number 00C9
+LEFT_LOW_ANGLE			  Number 00C8
+L_HORIZONTAL			  Near	 DGROUP:0321
+Turbo Assembler	 Version 4.1	    02/26/21 20:03:37	    Page 21
+Symbol Table
+
+
+
+L_VERTICAL			  Near	 DGROUP:035B
+MSG_REG_AX			  Byte	 DGROUP:0587
+MSG_REG_BX			  Byte	 DGROUP:0593
+MSG_REG_CX			  Byte	 DGROUP:059F
+MSG_REG_DI			  Byte	 DGROUP:05B7
+MSG_REG_DX			  Byte	 DGROUP:05AB
+MSG_REG_ES			  Byte	 DGROUP:05C3
+NEW_INTERRUPT			  Near	 DGROUP:0129
+NEW_STRING			  Near	 DGROUP:0216
+NEW_STRING2			  Near	 DGROUP:0257
+OLD08				  Dword	 DGROUP:0204
+OLD09				  Dword	 DGROUP:01C0
+OLD_VRAM			  Word	 DGROUP:05E0
+PRINT				  Near	 DGROUP:0529
+PRINT_BASE			  Near	 DGROUP:056F
+PRINT_BASE_REG			  Near	 DGROUP:0574
+PRINT_REGISTERS			  Near	 DGROUP:03AE
+PRINT_STRING			  Near	 DGROUP:022D
+PRINT_STRING2			  Near	 DGROUP:026E
+REGISTER_TOGGLE			  Near	 DGROUP:0149
+REGISTER_UPDATER		  Near	 DGROUP:01C4
+RIGHT_HIGH_ANGLE		  Number 00BB
+RIGHT_LOW_ANGLE			  Number 00BC
+R_VERTICAL			  Near	 DGROUP:0378
+SCREEN_CLEAR			  Near	 DGROUP:02F5
+SCREEN_FILL			  Near	 DGROUP:0302
+SIZE_CONSOLE			  Number 07D0
+STANDART_INT08			  Near	 DGROUP:01FB
+STANDART_INT09			  Near	 DGROUP:01B7
+START				  Near	 DGROUP:0100
+START_ON			  Near	 DGROUP:0184
+STRING				  Near	 DGROUP:030B
+SYSTEM				  Byte	 DGROUP:05CF
+VERTICAL_LINE			  Number 00BA
+VRAM_PTR			  Number B800
+XMAX				  Number 004F
+XMIN				  Number 0040
+YMAX				  Number 0011
+YMIN				  Number 0003
+
+Groups & Segments		  Bit Size Align  Combine Class
+
+DGROUP				  Group
+  _DATA				  16  0000 Word	  Public  DATA
+  _TEXT				  16  07C0 Word	  Public  CODE
+
